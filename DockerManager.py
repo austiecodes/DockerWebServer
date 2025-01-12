@@ -9,11 +9,11 @@ DockerContainer = NamedTuple('DockerContainer', name=str, image=str, ports=dict,
 class DockerManager:
 
     def __init__(self) -> None:
-        self.dockerclient = docker.from_env()
+        self.docker_client = docker.from_env()
 
     @property
     def images(self) -> List[str]:
-        return [str(image)[9:-2] for image in self.dockerclient.images.list()]
+        return [str(image)[9:-2] for image in self.docker_client.images.list()]
 
     @property
     def running_containers(self) -> List[DockerContainer]:
@@ -23,7 +23,7 @@ class DockerManager:
     def all_containers(self) -> List[DockerContainer]:
         return self.get_containers(True)
 
-    def get_containers(self, all: bool = False) -> List[DockerContainer]:
+    def get_containers(self, get_all: bool = False) -> List[DockerContainer]:
 
         def get_port_binding(attrs):
             port_bindings = attrs['HostConfig']['PortBindings']
@@ -32,48 +32,48 @@ class DockerManager:
         return [
             DockerContainer(container.name,
                             str(container.image)[9:-2], get_port_binding(container.attrs), container.attrs['HostConfig']['Binds'], container.attrs['NetworkSettings']['Networks']['bridge']['IPAddress'], 'running' if container.attrs['State']['Running'] else 'stopped')
-            for container in self.dockerclient.containers.list(all)
+            for container in self.docker_client.containers.list(get_all)
         ]
 
     def image_instantiation(self, container_name: str, user: str, image: str, shm_size: str, volume: List[str], working_dir: str, ports: dict, environment: dict , cmd: str  = None) -> None:
-        '''
+        """
         Args:
             container_name:容器名 e.g. 'my_container'
-            image:镜像 e.g. 'ubuntu:lastest'
+            user: name of user
+            image:镜像 e.g. 'ubuntu:latest'
             shm_size:共享内存大小 e.g. '2g'
             volume:目录映射列表(主机:容器) e.g. ['/home/A:/root/A','/home/B:/root/C'] 
             working_dir:默认工作目录 e.g. '/root/working_dir'
             ports:端口映射 (容器:主机) e.g. {'22/tcp':1234,'5555/tcp':6660} or {'22/tcp':[1234,12345]}
             environment: 环境变量 e.g. ['SERVER_USER=tom']
             cmd:启动时命令 e.g. 'bash'
-        '''
+        """
         try:
-            self.dockerclient.containers.create(image=image, user=user, command=cmd, working_dir=working_dir, device_requests=[docker.types.DeviceRequest(count=-1, capabilities=[['gpu']])], volumes=volume, shm_size=shm_size, ports=ports, name=container_name, environment=environment)
+            self.docker_client.containers.create(image=image, user=user, command=cmd, working_dir=working_dir, device_requests=[docker.types.DeviceRequest(count=-1, capabilities=[['gpu']])], volumes=volume, shm_size=shm_size, ports=ports, name=container_name, environment=environment)
         except:
             ...
 
-    def stop_container(self, containername: str) -> None:
-        self.find_container(containername).stop()
+    def stop_container(self, container_name: str) -> None:
+        self.find_container(container_name).stop()
 
-    def start_container(self, containername: str) -> None:
-        self.find_container(containername).start()
+    def start_container(self, container_name: str) -> None:
+        self.find_container(container_name).start()
 
-    def remove_container(self, containername: str) -> None:
-        self.find_container(containername).remove(force=True)
+    def remove_container(self, container_name: str) -> None:
+        self.find_container(container_name).remove(force=True)
 
-    def find_container(self, containername: str):
-        return self.dockerclient.containers.get(containername)
+    def find_container(self, container_name: str):
+        return self.docker_client.containers.get(container_name)
 
-    def run_exec(self, containername: str, cmd: str,user:str):
+    def run_exec(self, container_name: str, cmd: str,user:str):
         try:
             uid = int(os.popen(f'id -u {user}').read().replace('/n',''))
-            self.find_container(containername).exec_run(cmd, False,False,user=str(uid))
+            self.find_container(container_name).exec_run(cmd, False,False,user=str(uid))
         except:
             ...
 
-    def query_process(self, containername: str) -> List[DockerProcess]:
-        '''
-        return List of [pid,size(kb),cmd]
-        '''
-        processes = self.find_container(containername).top(ps_args='-eo pid,ppid,size,cmd')['Processes']
+    def query_process(self, container_name: str) -> List[DockerProcess]:
+        """return List of [pid,size(kb),cmd]
+        """
+        processes = self.find_container(container_name).top(ps_args='-eo pid,ppid,size,cmd')['Processes']
         return [DockerProcess(*_) for _ in processes]

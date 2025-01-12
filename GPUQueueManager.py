@@ -6,12 +6,12 @@ GPURequest = TypedDict('GPURequest', id=int, duration=int, user=str, cmd=str, co
 
 class GPUQueueManager:
 
-    def __init__(self, gpucount: int = 1) -> None:
-        self.gpucount = gpucount
-        self.gpu_wait_queues = [[] for _ in range(gpucount)]
+    def __init__(self, gpu_count: int = 1) -> None:
+        self.gpu_count = gpu_count
+        self.gpu_wait_queues = [[] for _ in range(gpu_count)]
 
-    def new_item(self, id: int, gpuid: int, user: str, duration: int, container: str = None, cmd: str = None) -> GPURequest:
-        current_queue = self.gpu_wait_queues[gpuid]
+    def new_item(self, id: int, gpu_id: int, user: str, duration: int, container: str = None, cmd: str = None) -> GPURequest:
+        current_queue = self.gpu_wait_queues[gpu_id]
         if len(current_queue) == 0:
             start_time = datetime.datetime.now()  # 如果队列为空，直接开始
         else:
@@ -41,60 +41,60 @@ class GPUQueueManager:
                     rq['end_time'] = rq['start_time'] + datetime.timedelta(hours=rq['duration'])
                     pre = rq
 
-    def stop(self, gpuid: int):
+    def stop(self, gpu_id: int):
         """某一申请结束时的逻辑,执行时机:1 申请时间到达 2 从容器当中发出的通知 3 web端发出的通知
 
         Args:
-            gpuid (int): GPU id
+            gpu_id (int): GPU id
         """
 
-        def find_frist_item(queue: List, need_cmd: bool = True) -> int:
+        def find_first_item(queue: List, need_cmd: bool = True) -> int:
             for idx, item in enumerate(queue):
                 if (need_cmd and item['cmd'] is not None and item['container'] is not None) or (not need_cmd and item['cmd'] is None):
                     return idx
             return -1
 
-        self.gpu_wait_queues[gpuid].pop(0)  # 当前执行的申请出队列
-        if len(self.gpu_wait_queues[gpuid]) == 0:  # 没有需要执行的申请
+        self.gpu_wait_queues[gpu_id].pop(0)  # 当前执行的申请出队列
+        if len(self.gpu_wait_queues[gpu_id]) == 0:  # 没有需要执行的申请
             return None
 
         self.update_queue()  # 更新队列时间
 
         now_time_hour = datetime.datetime.now().hour
         if now_time_hour < 8 or now_time_hour > 22:  # 晚上10点到早上8点不执行无指令的申请
-            q1: GPURequest = self.gpu_wait_queues[gpuid][0]
+            q1: GPURequest = self.gpu_wait_queues[gpu_id][0]
             if q1['cmd'] is not None and q1['container'] is not None:  # 第一个申请是有指令的,直接执行
                 return q1
             else:
-                idx = find_frist_item(self.gpu_wait_queues[gpuid], need_cmd=True)  # 找到第一个有指令的申请
+                idx = find_first_item(self.gpu_wait_queues[gpu_id], need_cmd=True)  # 找到第一个有指令的申请
                 if idx == -1 or q1['postponement'] >= 2:  # 都没有指令，或者第一个申请的延迟次数大于等于2次，插入无意义的申请到早上8点
                     end_time = datetime.datetime.now()
                     if end_time.hour >= 22:
                         end_time = end_time + datetime.timedelta(days=1)
                     end_time = end_time.replace(hour=8, minute=0, second=0, microsecond=0)  # 早上8点
                     item = GPURequest(id=-1, duration=0, user='system', container=None, cmd=None, start_time=datetime.datetime.now(), end_time=end_time, postponement=0)
-                    self.gpu_wait_queues[gpuid].insert(0, item)
+                    self.gpu_wait_queues[gpu_id].insert(0, item)
                     self.update_queue()
                     return item
                 else:
-                    item: GPURequest = self.gpu_wait_queues[gpuid].pop(idx)  # 取出第一个有指令的申请
+                    item: GPURequest = self.gpu_wait_queues[gpu_id].pop(idx)  # 取出第一个有指令的申请
                     for i in range(idx):
-                        self.gpu_wait_queues[gpuid][i]['postponement'] += 1  # 在该指令之前的申请延迟次数加1
-                    self.gpu_wait_queues[gpuid].insert(0, item)  # 插入到第一个位置
+                        self.gpu_wait_queues[gpu_id][i]['postponement'] += 1  # 在该指令之前的申请延迟次数加1
+                    self.gpu_wait_queues[gpu_id].insert(0, item)  # 插入到第一个位置
                     self.update_queue()  # 更新队列时间
                     return item
         else:  # 早上8点到晚上10点优先执行无指令的申请
-            q1: GPURequest = self.gpu_wait_queues[gpuid][0]
+            q1: GPURequest = self.gpu_wait_queues[gpu_id][0]
             if q1['cmd'] is None or q1['container'] is None:  # 第一个申请是无指令的,直接执行
                 return q1
             else:
-                idx = find_frist_item(self.gpu_wait_queues[gpuid], need_cmd=False)  # 找到第一个无指令的申请
+                idx = find_first_item(self.gpu_wait_queues[gpu_id], need_cmd=False)  # 找到第一个无指令的申请
                 if idx == -1 or q1['postponement'] >= 2:  # 都有指令，或者第一个申请的延迟次数大于等于2次，直接执行第一个
                     return q1
                 else:
-                    item: GPURequest = self.gpu_wait_queues[gpuid].pop(idx)  # 取出第一个无指令的申请
+                    item: GPURequest = self.gpu_wait_queues[gpu_id].pop(idx)  # 取出第一个无指令的申请
                     for i in range(idx):
-                        self.gpu_wait_queues[gpuid][i]['postponement'] += 1
-                    self.gpu_wait_queues[gpuid].insert(0, item)  # 插入到第一个位置
+                        self.gpu_wait_queues[gpu_id][i]['postponement'] += 1
+                    self.gpu_wait_queues[gpu_id].insert(0, item)  # 插入到第一个位置
                     self.update_queue()
                     return item

@@ -10,9 +10,9 @@ import config
 from DockerManager import DockerManager
 from GPUQueueManager import GPUQueueManager, GPURequest
 from MailSender import EmailMessager
-from NvidiaGPU import NVIDIA_GPU
+from NvidiaGPU import GPU
 from TimeManager import TimeManager
-from utils import TestContainer, TestPasswd
+from utils import test_container, test_passwd
 
 database = TinyDB('data/database/database.json',sort_keys=True, indent=4, separators=(',', ': '))
 # 初始化
@@ -24,8 +24,8 @@ docker_image_database = database.table('docker_images')
 gpu_request_database = database.table('gpu_request_database')
 query = Query()
 # 创建管理器
-nvidia_gpu = NVIDIA_GPU()
-gpu_queue_manager = GPUQueueManager(nvidia_gpu.gpucount)
+nvidia_gpu = GPU()
+gpu_queue_manager = GPUQueueManager(nvidia_gpu.gpu_count)
 docker_manager = DockerManager()
 ## 读取所有用户邮件信息
 user_email = {}
@@ -68,7 +68,7 @@ def login():
             user_name = request.form.get('account')
             passward = request.form.get('password')
             hold_login = request.form.get('holdlogin')
-            if TestPasswd(user_name, passward):
+            if test_passwd(user_name, passward):
                 resp = redirect('/')
                 if hold_login == 'True':
                     resp.set_cookie('uname', user_name, 60 * 60 * 24 * 30)
@@ -84,7 +84,7 @@ def login():
 @app.route('/gpumanager/gpuinfo')
 def gpuinfo():
     gpu_info = nvidia_gpu.gpu_info()  # 获取GPU信息
-    for i in range(nvidia_gpu.gpucount):
+    for i in range(nvidia_gpu.gpu_count):
         ginfo = gpu_info[i]
         waitlist = gpu_queue_manager.gpu_wait_queues[i]
         if len(waitlist) == 0:
@@ -163,7 +163,7 @@ def stopearlycontainer():
     ip_addr = request.remote_addr
     containers = docker_manager.get_containers()
     for container in containers:
-        if TestContainer(container.name, user):
+        if test_container(container.name, user):
             if container.ip == ip_addr:
                 for idx, item in enumerate(gpu_queue_manager.current_item()):
                     if item is not None and item['user'] == user:
@@ -246,7 +246,7 @@ def mycontainer():
     containers = docker_manager.all_containers
     r = []
     for container in containers:
-        if TestContainer(container.name, uname):
+        if test_container(container.name, uname):
             r.append({"containername": container.name, "imagename": image_name_dict[container.image], "status": container.status, "ports": '|'.join([f"{port['container_port']}->{port['host_port']}" for port in container.ports])})
 
     return json.dumps(r)
@@ -263,7 +263,7 @@ def applyforcontainer():
     # 查找该用户已有的容器
     r = []
     for container in containers:
-        if TestContainer(container.name, uname):
+        if test_container(container.name, uname):
             r.append(container.name)
         # 统计在docker系统当中已经被占用的端口
         ports_used += [_['host_port'] for _ in container.ports]

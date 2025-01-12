@@ -2,18 +2,17 @@ import datetime
 import os
 import threading
 import time
-from typing import List
 
 from DockerManager import DockerManager
 from GPUQueueManager import GPUQueueManager, GPURequest
 from MailSender import EmailMessager
-from NvidiaGPU import NVIDIA_GPU
-from utils import TestContainer
+from NvidiaGPU import GPU
+from utils import test_container
 
 
 class TimeManager(threading.Thread):
 
-    def __init__(self, nvidia_gpu: NVIDIA_GPU, docker_manager: DockerManager, gpu_queue_manager: GPUQueueManager, mail_manager: EmailMessager):
+    def __init__(self, nvidia_gpu: GPU, docker_manager: DockerManager, gpu_queue_manager: GPUQueueManager, mail_manager: EmailMessager):
         super().__init__()
         self.nvidia_gpu = nvidia_gpu
         self.docker_manager = docker_manager
@@ -23,8 +22,8 @@ class TimeManager(threading.Thread):
     def run(self):
         while True:
             # 删除过时的请求
-            changed = [False for _ in range(self.nvidia_gpu.gpucount)]
-            next_item = [None for _ in range(self.nvidia_gpu.gpucount)]
+            changed = [False for _ in range(self.nvidia_gpu.gpu_count)]
+            next_item = [None for _ in range(self.nvidia_gpu.gpu_count)]
             for idx, queue in enumerate(self.gpu_queue_manager.gpu_wait_queues):
                 if len(queue) == 0:
                     continue
@@ -35,19 +34,19 @@ class TimeManager(threading.Thread):
                     next_item[idx] = item
 
             # 检查并结束非法进程
-            for gpuid in range(self.nvidia_gpu.gpucount):
-                process = self.nvidia_gpu.running_processes(gpuid)
+            for gpu_id in range(self.nvidia_gpu.gpu_count):
+                process = self.nvidia_gpu.running_processes(gpu_id)
                 if len(process) == 0:
                     continue
-                if len(self.gpu_queue_manager.gpu_wait_queues[gpuid]) == 0:
+                if len(self.gpu_queue_manager.gpu_wait_queues[gpu_id]) == 0:
                     self.kill_process([_.PID for _ in process])
                     continue
-                item: GPURequest = self.gpu_queue_manager.gpu_wait_queues[gpuid][0]
+                item: GPURequest = self.gpu_queue_manager.gpu_wait_queues[gpu_id][0]
                 user = item['user']
                 containers = self.docker_manager.get_containers()
                 containers_process = []
                 for container in containers:
-                    if TestContainer(container.name, user):
+                    if test_container(container.name, user):
                         containers_process += [_.PID for _ in self.docker_manager.query_process(container.name)]
                 for p in process:
                     if str(p.PID) not in containers_process:
@@ -72,6 +71,6 @@ class TimeManager(threading.Thread):
 
             time.sleep(20)
 
-    def kill_process(self, process: List[int]):
+    def kill_process(self, process: list[int]):
         for pid in process:
             os.system(f'kill -9 {pid}')
