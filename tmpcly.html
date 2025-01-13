@@ -1,0 +1,48 @@
+        <div class="centerbox">
+            <div class="box1">
+                <!-- 显卡使用情况显示 -->
+                <div class="gpu-panel">
+
+
+                    <div style="height: 30px;"></div>
+                    <!-- <svg width="200" height="200" id="processbar">
+                        <circle fill="none" cx="100" cy="100" r="75" stroke="#EBEDF0" stroke-width="10" />
+
+                        <path fill="none" d="M 100, 25 A 75, 75, 0, 0, 0, 100, 175 A 75, 75, 0, 0, 0, 100, 25"
+                            stroke="#50D4AB" stroke-width="10" />
+                        <text x="50" y="110" style="font-size: 25px;" ></text>
+                    </svg> -->
+                    <!-- new10.17 -->
+                    <div class="gpu-usage">
+                        <div class="gpu-progress">
+                            <progress id="gpu-progress-1" value="0" max="100"></progress>
+                            <label id="gpu-label-1">0MB / 24564MB</label>
+                            <label id="gpu-time-1" class="time-label"></label>
+                            <label id="gpu-wait-1" class="wait-label"></label>
+                        </div>
+                        <div class="gpu-progress">
+                            <progress id="gpu-progress-2" value="0" max="100"></progress>
+                            <label id="gpu-label-2">0MB / 24564MB</label>
+                            <label id="gpu-time-2" class="time-label"></label>
+                            <label id="gpu-wait-2" class="wait-label"></label>
+                        </div>
+                        <!-- 第三张显卡 -->
+                        <div class="gpu-progress">
+                            <progress id="gpu-progress-3" value="0" max="100"></progress>
+                            <label id="gpu-label-3">0MB / 24564MB</label>
+                            <label id="gpu-time-3" class="time-label"></label>
+                            <label id="gpu-wait-3" class="wait-label"></label>
+                        </div>
+                    </div>
+                    <!-- 隐藏，移动位置 -->
+                    <!-- <div class="gpu-panel-info">
+                        <p>当前使用:</p>
+                        <p>预计等待:</p>
+                    </div> -->
+                    <p class="gpu-panel-memory"></p>
+                    <div class="curr-item">
+                        <div>
+                            <p></p>
+                        </div>
+                        <button class="cancel-gpu">取消申请</button>
+                    </div>
