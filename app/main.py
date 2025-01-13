@@ -6,12 +6,12 @@ import time
 from flask import Flask, flash, jsonify, redirect, request
 from tinydb import Query, TinyDB
 
-import config
-from docker_manager import DockerManager
-from queue_manager import GPUQueueManager, GPURequest
-from mail_sender import EmailMessager
-from nvidia_gpu import NvidiaGPU
-from time_manager import TimeManager
+import app.config as config
+from managers.docker_manager import DockerManager
+from app.managers.queue_manager import GPUQueueManager, GPURequest
+from app.managers.mail_sender import EmailMessager
+from data.nvidia_gpu import NvidiaGPU
+from managers.time_manager import TimeManager
 from utils import check_container, check_password
 
 database = TinyDB('data/database/database.json',sort_keys=True, indent=4, separators=(',', ': '))

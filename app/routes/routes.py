@@ -5,9 +5,9 @@ import time
 
 from flask import Blueprint, request, redirect, flash
 
-import config
-from main import nvidia_gpu, gpu_queue_manager
-from queue_manager import GPURequest
+import app.config as config
+from app.main import nvidia_gpu, gpu_queue_manager
+from app.managers.queue_manager import GPURequest
 from utils import test_container, test_passwd
 
 api = Blueprint('api', __name__)
