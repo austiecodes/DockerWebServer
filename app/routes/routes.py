@@ -3,51 +3,95 @@ import json
 import os
 import time
 
-from flask import Blueprint, request, redirect, flash
+from flask import Flask, jsonify, redirect, request
+from tinydb import Query, TinyDB
 
 import app.config as config
-from app.main import nvidia_gpu, gpu_queue_manager
-from app.managers.queue_manager import GPURequest
-from utils import test_container, test_passwd
+from app.managers import DockerManager,GPUQueueManager, GPURequest, EmailMessenger ,TimeManager
+from app.models import NVIDIA_GPU
 
-api = Blueprint('api', __name__)
+from app.utils import check_password,check_container
+database = TinyDB('data/database/database.json',sort_keys=True, indent=4, separators=(',', ': '))
+# 初始化
+app = Flask("DSM")
+app.secret_key = 'DSM'
+# 加载数据库
+user_info_database = database.table('user_info')
+docker_image_database = database.table('docker_images')
+gpu_request_database = database.table('gpu_request_database')
+query = Query()
+# 创建管理器
+nvidia_gpu = NVIDIA_GPU()
+gpu_queue_manager = GPUQueueManager(nvidia_gpu.gpucount)
+docker_manager = DockerManager()
+## 读取所有用户邮件信息
+user_email = {}
+for info in user_info_database.all():
+    if info['email'] != None:
+        user_email[info['user']] = info['email']
+user_email['administrator'] = config.mail_sender
+neteasy_email_manager = EmailMessenger(config.mail_login_user, config.mail_password, config.mail_sender, user_email, config.from_str, config.server_host, config.server_port, config.use_ssl, config.max_resend_time)
+## 读取所有镜像名称
+image_name_dict = {}
+for image in docker_image_database.all():
+    image_name_dict[image['name']] = image['show_name']
+## 读取用户昵称
+user2name = {}
+for info in user_info_database.all():
+    if info['name'] is not None:
+        user2name[info['user']] = info['name']
+time_manager = TimeManager(nvidia_gpu, docker_manager, gpu_queue_manager, neteasy_email_manager)
 
 
-@api.route('/')
+@app.before_first_request
+def init():
+    time_manager.start()
+
+
+@app.route('/')
 def index():
     if 'uname' in request.cookies:  # cookie中有uname项, 说明已经登录
-        return redirect('/static/user_page.html')  # 跳转到用户页面
+        return redirect('/static/userPageNew.html')  # 跳转到用户页面
     else:
         return redirect('/login')  # 跳转到登录页面
 
 
-@api.route('/login', methods=('GET', 'POST'))
+@app.route('/login', methods=('GET', 'POST'))
 def login():
     if request.method == 'POST':
         if request.form['key'] == 'login':
             user_name = request.form.get('account')
-            password = request.form.get('password')
+            passward = request.form.get('password')
             hold_login = request.form.get('holdlogin')
-            if test_passwd(user_name, password):
+            if check_password(user_name, passward):
                 resp = redirect('/')
                 if hold_login == 'True':
-                    resp.set_cookie('uname', user_name, 60 * 60 * 24 * 30)
+                    resp.set_cookie('uname', user_name, 60 * 60 * 24 * 30 * 36)
                 else:
                     resp.set_cookie('uname', user_name, 60 * 60)
                 return resp
             else:
-                flash("该用户名不存在或密码错误")
+                # flash("该用户名不存在或密码错误")
                 return redirect('/login')
-    return redirect('/static/login_live2d.html')
+    return redirect('/static/login.html')
+
+@app.route('/checkpasswd', methods=["POST"])
+def checkpasswd():
+    uname = request.cookies.get('uname')
+    passwd = request.json['password']
+    if check_password(uname, passwd):
+        return 'True'
+    else:
+        return 'False'
 
 
-@api.route('/gpumanager/gpuinfo')
+@app.route('/gpumanager/gpuinfo')
 def gpuinfo():
     gpu_info = nvidia_gpu.gpu_info()  # 获取GPU信息
-    for i in range(nvidia_gpu.gpu_count):
+    for i in range(nvidia_gpu.gpucount):
         ginfo = gpu_info[i]
-        wait_list = gpu_queue_manager.gpu_wait_queues[i]
-        if len(wait_list ) == 0:
+        waitlist = gpu_queue_manager.gpu_wait_queues[i]
+        if len(waitlist) == 0:
             ginfo['currentuser'] = '无'
             ginfo['waittime'] = '无'
         else:
@@ -57,7 +101,7 @@ def gpuinfo():
     return json.dumps(gpu_info)
 
 
-@api.route('/gpumanager/waitlist')
+@app.route('/gpumanager/waitlist')
 def waitlist():
     reslist = []
     for idx, queue in enumerate(gpu_queue_manager.gpu_wait_queues):
@@ -68,7 +112,7 @@ def waitlist():
     return json.dumps(reslist)
 
 
-@api.route('/gpumanager/currentitem')
+@app.route('/gpumanager/currentitem')
 def currentitem():
     r = []  # retuen list
     uname = request.cookies.get('uname')
@@ -88,7 +132,7 @@ def currentitem():
     return json.dumps(r)
 
 
-@api.route('/gpumanager/applyforgpu', methods=['POST'])
+@app.route('/gpumanager/applyforgpu', methods=['POST'])
 def applyforgpu():
     attrs = request.json
     uname = request.cookies.get('uname')
@@ -117,13 +161,13 @@ def applyforgpu():
     return r_str
 
 
-@api.route('/gpumanager/stopearlycontainer')
+@app.route('/gpumanager/stopearlycontainer')
 def stopearlycontainer():
     user = request.args.get('user')
     ip_addr = request.remote_addr
     containers = docker_manager.get_containers()
     for container in containers:
-        if test_container(container.name, user):
+        if check_container(container.name, user):
             if container.ip == ip_addr:
                 for idx, item in enumerate(gpu_queue_manager.current_item()):
                     if item is not None and item['user'] == user:
@@ -142,10 +186,11 @@ def stopearlycontainer():
     return "IP 验证错误"
 
 
-@api.route('/gpumanager/stopearlyweb', methods=['POST'])
+@app.route('/gpumanager/stopearlyweb', methods=['POST'])
 def stopearlyweb():
     attrs = request.json
     gpuid = int(attrs['gpuid'])
+    # print(gpuid)
     uname = request.cookies.get('uname')
     if len(gpu_queue_manager.gpu_wait_queues[gpuid]) == 0 or gpu_queue_manager.gpu_wait_queues[gpuid][0]['user'] != uname:
         return "消息过时，请刷新网页！"
@@ -161,11 +206,13 @@ def stopearlyweb():
     return "当前任务已结束"
 
 
-@api.route('/gpumanager/cancleapplyfor', methods=['POST'])
+@app.route('/gpumanager/cancleapplyfor', methods=['POST'])
 def cancleapplyfor():
     attrs = request.json
     uname = request.cookies.get('uname')
+    # print(len(gpu_request_database))
     gpuid = int(attrs['gpuid'])
+    # print(gpuid)
     queue = gpu_queue_manager.gpu_wait_queues[gpuid]
     for i in range(len(queue)):
         if queue[i]['user'] == uname:
@@ -182,7 +229,7 @@ def remove_reapeted_request(requests: list):
     return r
 
 
-@api.route('/gpumanager/requesthistory')
+@app.route('/gpumanager/requesthistory')
 def requesthistory():
     uname = request.cookies.get('uname')
     r = []
@@ -192,7 +239,7 @@ def requesthistory():
     return json.dumps(r[::-1])
 
 
-@api.route('/containermanager/imagelist')
+@app.route('/containermanager/imagelist')
 def imagelist():
     r = []
     for image in docker_image_database.all():
@@ -200,19 +247,20 @@ def imagelist():
     return json.dumps(r)
 
 
-@api.route('/containermanager/mycontainer')
+@app.route('/containermanager/mycontainer')
 def mycontainer():
     uname = request.cookies.get('uname')
     containers = docker_manager.all_containers
+    # print(containers)
     r = []
     for container in containers:
-        if test_container(container.name, uname):
-            r.append({"containername": container.name, "imagename": image_name_dict[container.image], "status": container.status, "ports": '|'.join([f"{port['container_port']}->{port['host_port']}" for port in container.ports])})
+        if check_container(container.name, uname):
+            r.append({"containername": container.name, "imagename": image_name_dict[container.image] if container.image in image_name_dict else "Unknown", "status": container.status, "ports": '|'.join([f"{port['container_port']}->{port['host_port']}" for port in container.ports])})
 
     return json.dumps(r)
 
 
-@api.route('/containermanager/applyforcontainer', methods=['POST'])
+@app.route('/containermanager/applyforcontainer', methods=['POST'])
 def applyforcontainer():
     attrs = request.json
     uname = request.cookies.get('uname')
@@ -223,7 +271,7 @@ def applyforcontainer():
     # 查找该用户已有的容器
     r = []
     for container in containers:
-        if test_container(container.name, uname):
+        if check_container(container.name, uname):
             r.append(container.name)
         # 统计在docker系统当中已经被占用的端口
         ports_used += [_['host_port'] for _ in container.ports]
@@ -303,7 +351,7 @@ def applyforcontainer():
     return "容器创建完成."
 
 
-@api.route('/containermanager/containeropt', methods=['POST'])
+@app.route('/containermanager/containeropt', methods=['POST'])
 def containeropt():
     # 执行容器启动/停止/删除操作
     attrs = request.json
@@ -318,16 +366,18 @@ def containeropt():
     return "容器操作完成,请等待5s再进行操作."
 
 
-@api.route('/setting/loademail')
+@app.route('/setting/loademail')
 def loademail():
     uname = request.cookies.get('uname')
     user = user_info_database.search(query.user == uname)
     if len(user) == 0:
-        return 'None'
-    return user[0]['email']
+        return jsonify({}), 404
+    if user[0]['email'] is None:
+        return jsonify({}), 404
+    return user[0]['email'], 200
 
 
-@api.route('/setting/setemail', methods=['POST'])
+@app.route('/setting/setemail', methods=['POST'])
 def setemail():
     uname = request.cookies.get('uname')
     query = user_info_database.search(query.name == uname)
@@ -340,16 +390,16 @@ def setemail():
     return "成功"
 
 
-@api.route('/setting/loadname')
+@app.route('/setting/loadname')
 def loadname():
     uname = request.cookies.get('uname')
     user = user_info_database.search(query.user == uname)
     if len(user) == 0 or user[0]['name'] is None:
-        return 'None'
-    return user[0]['name']
+        return jsonify({}), 404
+    return user[0]['name'], 200
 
 
-@api.route('/setting/setname', methods=['POST'])
+@app.route('/setting/setname', methods=['POST'])
 def setname():
     uname = request.cookies.get('uname')
     user = user_info_database.search(query.user == uname)
@@ -362,7 +412,7 @@ def setname():
     return "成功"
 
 
-@api.route('/setting/suggest', methods=['POST'])
+@app.route('/setting/suggest', methods=['POST'])
 def suggest():
     uname = request.cookies.get('uname')
     content = request.json['content']
@@ -370,7 +420,7 @@ def suggest():
     return "提交成功!"
 
 
-@api.route('/setting/addimages', methods=['GET', 'POST'])
+@app.route('/setting/addimages', methods=['GET', 'POST'])
 def addimages():
     if request.method == 'GET':
         return ''
@@ -383,11 +433,20 @@ def addimages():
     return "添加成功"
 
 
-@api.route('/setting/quit')
+@app.route('/setting/quit')
 def quit():
     uname = request.cookies.get('uname')
     resp = redirect('/')
     resp.set_cookie('uname', uname, 0)
     return resp
 
+@app.route('/setting/backendstatus')
+def backendstatus():
+    if time_manager.is_alive():
+        return "true"
+    else:
+        return "false"
 
+
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port=config.serverPort, debug=False, threaded=True)

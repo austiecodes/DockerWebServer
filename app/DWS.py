@@ -8,7 +8,7 @@ from tinydb import Query, TinyDB
 
 import config
 from managers import DockerManager,GPUQueueManager, GPURequest, EmailMessager,TimeManager
-from NvidiaGPU import NVIDIA_GPU
+from app.models.NvidiaGPU import NVIDIA_GPU
 from utils import check_password,check_container
 
 database = TinyDB("data/database/database.json", sort_keys=True, indent=4, separators=(",", ": "))

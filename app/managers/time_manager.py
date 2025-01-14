@@ -4,16 +4,16 @@ import threading
 import time
 
 
-from managers.docker_manager import DockerManager
-from managers.queue_manager import GPUQueueManager, GPURequest
-from managers.mail_sender import EmailMessager
-from NvidiaGPU import NVIDIA_GPU
-from utils import check_container
+from docker_manager import DockerManager
+from queue_manager import GPUQueueManager, GPURequest
+from .mail_sender import EmailMessenger
+from app.models.NvidiaGPU import NVIDIA_GPU
+from app.utils import check_container
 
 
 class TimeManager(threading.Thread):
 
-    def __init__(self, nvidia_gpu: NVIDIA_GPU, docker_manager: DockerManager, gpu_queue_manager: GPUQueueManager, mail_manager: EmailMessager):
+    def __init__(self, nvidia_gpu: NVIDIA_GPU, docker_manager: DockerManager, gpu_queue_manager: GPUQueueManager, mail_manager: EmailMessenger):
         super().__init__()
         self.nvidia_gpu = nvidia_gpu
         self.docker_manager = docker_manager

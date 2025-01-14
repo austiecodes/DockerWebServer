@@ -4,7 +4,7 @@ import time
 from email.utils import formataddr
 
 
-class EmailMessager:
+class EmailMessenger:
 
     def __init__(self, mail_login_user: str, mail_password: str, mail_sender: str, user_email: dict, from_str: str, server_host: str, server_port: int, use_ssl: bool = False, max_resend_time: int = 5) -> None:
         self.mail_login_user = mail_login_user
