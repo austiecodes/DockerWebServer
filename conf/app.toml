@@ -1,0 +1,25 @@
+[Host]
+Name = "DockerWebServer"
+Port = 9999
+Key = ""
+
+[TinyDB]
+GpuRequestDatabaseSavePath = 'data/database/gpu_request_database.json'
+DockerImagesDatabaseSavePath = 'data/database/docker_images.json'
+UserInfoDatabaseSavePath = 'data/database/user_info.json'
+
+[DB]
+Path = 'data/dws.db'
+
+[Mail]
+MailLoginUser = ""
+MailPassword = ""
+MailSender = ""
+FromStr = 'DWS Manager'
+ServerHost = "smtp.email.qq.com"
+ServerPort = 465
+UseSSL = true
+MaxResendTime = 5
+
+[Admin]
+AdministratorPasswd = ""

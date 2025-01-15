@@ -1,23 +1,15 @@
 import datetime
 import json
-import datetime
-import json
 import os
 import time
 
-from flask import Flask, app, jsonify, redirect, request
+from flask import Blueprint, Flask, app, jsonify, redirect, request
 from tinydb import Query, TinyDB
 
-import app.config as config
-from app.managers import DockerManager,GPUQueueManager, GPURequest, EmailMessenger ,TimeManager
-from app.models import NVIDIA_GPU
-
-from app.utils import check_password,check_container
-
-from flask import Blueprint, request, jsonify
-
-from app.managers import GPUQueueManager, DockerManager, EmailMessenger, TimeManager
-from app.models import NVIDIA_GPU
+from managers import (DockerManager, EmailMessenger, GPUQueueManager,
+                          GPURequest, TimeManager)
+from models import NVIDIA_GPU
+from app.utils import check_container, check_password
 
 gpu_bp = Blueprint('gpu', __name__)
 

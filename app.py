@@ -1,28 +1,46 @@
-from flask import Flask
-from tinydb import TinyDB
+from flask import Flask, app
+from flask_sqlalchemy import SQLAlchemy
 
-import config as config
-from routes.gpu import gpu_bp  # 导入 GPU 路由蓝图
-from routes.container import container_bp  # 导入容器路由蓝图
-from routes.user import user_bp  # 导入用户路由蓝图
+from routes import main
+from utils import parse_app_config
 
-# 初始化数据库和应用程序
-database = TinyDB('data/database/database.json',
-                  sort_keys=True,
-                  indent=4,
-                  separators=(',', ': '))
-app = Flask("DSM")
-app.secret_key = 'DSM'
+app_config = parse_app_config("./conf/app.toml")
 
-# 加载数据库表格
-user_info_database = database.table('user_info')
-docker_image_database = database.table('docker_images')
-gpu_request_database = database.table('gpu_request_database')
+app = Flask(app_config.Host.Name)
+app.secret_key = app_config.Host.Key
 
-# 注册蓝图
-app.register_blueprint(gpu_bp, url_prefix='/gpumanager')
-app.register_blueprint(container_bp, url_prefix='/containermanager')
-app.register_blueprint(user_bp, url_prefix='/setting')
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{app_config.DB.Path}'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False  # 禁用修改追踪，减少开销
+
+db = SQLAlchemy()
+db.init_app(app)
+
+with app.app_context():
+    db.create_all()
+
+app.register_blueprint(main)
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=config.serverPort, debug=False, threaded=True)
+    app.run(host='0.0.0.0',
+            port=app_config.Host.Port,
+            debug=False,
+            threaded=True)
+
+# tinyDB
+# database = TinyDB(config.TinyDB.GpuRequestDatabaseSavePath,
+#                   sort_keys=True,
+#                   indent=4,
+#                   separators=(',', ':'))
+
+# user_info_database = database.table('user_info')
+# docker_image_database = database.table('docker_images')
+# gpu_request_database = database.table('gpu_request_database')
+
+# flask blueprint
+# from routes.gpu import gpu_bp
+# from routes.container import container_bp
+# from routes.user import user_bp
+
+# app.register_blueprint(gpu_bp, url_prefix='/gpu')
+# app.register_blueprint(container_bp, url_prefix='/container')
+# app.register_blueprint(user_bp, url_prefix='/user')
