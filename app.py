@@ -1,15 +1,16 @@
-import os
-
 from flask import Flask
 from tinydb import TinyDB
 
-import app.config as config
-from app.routes.gpu import gpu_bp  # 导入 GPU 路由蓝图
-from app.routes.container import container_bp  # 导入容器路由蓝图
-from app.routes.user import user_bp  # 导入用户路由蓝图
+import config as config
+from routes.gpu import gpu_bp  # 导入 GPU 路由蓝图
+from routes.container import container_bp  # 导入容器路由蓝图
+from routes.user import user_bp  # 导入用户路由蓝图
 
 # 初始化数据库和应用程序
-database = TinyDB('data/database/database.json', sort_keys=True, indent=4, separators=(',', ': '))
+database = TinyDB('data/database/database.json',
+                  sort_keys=True,
+                  indent=4,
+                  separators=(',', ': '))
 app = Flask("DSM")
 app.secret_key = 'DSM'
 
